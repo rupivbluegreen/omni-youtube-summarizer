@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Omni YouTube Summarizer — Summarize YouTube videos with Claude, GPT, Gemini, or Ollama</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Chrome extension that summarizes YouTube videos with your choice of LLM — Claude, GPT, Gemini, or local Ollama. Multi-modal, BYO API key, zero backend.">
+<meta property="og:title" content="Omni YouTube Summarizer">
+<meta property="og:description" content="Summarize any YouTube video with Claude, GPT, Gemini, or local Ollama. Multi-modal. BYO key. Zero backend.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://rupivbluegreen.github.io/omni-youtube-summarizer/">
+<link rel="icon" type="image/png" href="../extension/icons/icon48.png">
+<style>
+  :root {
+    --bg: #0b0d10;
+    --fg: #e8ecef;
+    --muted: #9aa4ad;
+    --accent: #ff4b4b;
+    --card: #14181c;
+    --border: #23282d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(ellipse at top, #1a1f25 0%, var(--bg) 60%);
+    color: var(--fg);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 48px 24px 96px; }
+  header { text-align: center; padding: 48px 0 24px; }
+  header img.logo { width: 96px; height: 96px; border-radius: 20px; box-shadow: 0 12px 40px rgba(255,75,75,0.15); }
+  h1 { font-size: 48px; margin: 20px 0 8px; letter-spacing: -0.02em; line-height: 1.1; }
+  h1 span.accent { color: var(--accent); }
+  .tagline { font-size: 20px; color: var(--muted); margin: 0 auto 32px; max-width: 640px; }
+  .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .btn {
+    display: inline-block;
+    padding: 12px 22px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 15px;
+    border: 1px solid var(--border);
+    transition: transform 0.1s ease, background 0.15s ease;
+  }
+  .btn:hover { transform: translateY(-1px); text-decoration: none; }
+  .btn.primary { background: var(--accent); color: #fff; border-color: transparent; }
+  .btn.primary:hover { background: #ff6060; }
+  .btn.ghost { background: var(--card); color: var(--fg); }
+  .btn.ghost:hover { background: #1b2025; }
+  .badges { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 16px 0 0; }
+  .badges img { height: 20px; }
+  .demo {
+    margin: 48px 0;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+  }
+  .demo img { display: block; width: 100%; height: auto; }
+  .demo-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 16 / 9;
+    background: linear-gradient(135deg, #1a1f25, #23282d);
+    color: var(--muted);
+    font-size: 14px;
+    text-align: center;
+    padding: 24px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin: 48px 0;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .card h3 { margin: 0 0 6px; font-size: 17px; }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; }
+  .section-h { font-size: 28px; margin: 64px 0 16px; letter-spacing: -0.01em; }
+  .providers {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+    font-size: 14px;
+  }
+  .providers th, .providers td {
+    text-align: left;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .providers th { color: var(--muted); font-weight: 500; }
+  .providers tr:last-child td { border-bottom: none; }
+  ol.steps { counter-reset: s; list-style: none; padding: 0; }
+  ol.steps li { counter-increment: s; padding: 10px 0 10px 40px; position: relative; color: var(--fg); }
+  ol.steps li::before {
+    content: counter(s);
+    position: absolute; left: 0; top: 8px;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--accent); color: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 13px;
+  }
+  footer {
+    margin-top: 96px;
+    padding-top: 32px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+  }
+  footer a { color: var(--muted); }
+  footer a:hover { color: var(--fg); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img class="logo" src="../extension/icons/icon128.png" alt="">
+    <h1>Summarize any YouTube video<br>with <span class="accent">your</span> favorite LLM</h1>
+    <p class="tagline">Claude, GPT, Gemini, or local Ollama. Multi-modal. BYO API key. Zero backend. Open source.</p>
+    <div class="cta-row">
+      <a class="btn primary" href="https://github.com/rupivbluegreen/omni-youtube-summarizer/releases/latest">Download latest release</a>
+      <a class="btn ghost" href="https://github.com/rupivbluegreen/omni-youtube-summarizer">View on GitHub</a>
+    </div>
+    <div class="badges">
+      <a href="https://github.com/rupivbluegreen/omni-youtube-summarizer/actions/workflows/ci.yml"><img src="https://github.com/rupivbluegreen/omni-youtube-summarizer/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+      <a href="https://github.com/rupivbluegreen/omni-youtube-summarizer/releases/latest"><img src="https://img.shields.io/github/v/release/rupivbluegreen/omni-youtube-summarizer?sort=semver" alt="Release"></a>
+      <a href="https://github.com/rupivbluegreen/omni-youtube-summarizer/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT"></a>
+      <a href="https://github.com/rupivbluegreen/omni-youtube-summarizer/stargazers"><img src="https://img.shields.io/github/stars/rupivbluegreen/omni-youtube-summarizer?style=social" alt="Stars"></a>
+    </div>
+  </header>
+
+  <div class="demo">
+    <div class="demo-placeholder">
+      Demo GIF goes here. Drop <code>demo.gif</code> into <code>store-assets/screenshots/</code> and update this page to reference it.
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><h3>🧠 Bring your own model</h3><p>Swap between Anthropic, OpenAI, Gemini, and Ollama in Settings. Your key, your choice.</p></div>
+    <div class="card"><h3>🖼 Multi-modal</h3><p>Optional: attach chapter thumbnails so vision-capable models can see the video, not just read it.</p></div>
+    <div class="card"><h3>⚡ Inline button</h3><p>Summarize button appears right in YouTube's action row. One click.</p></div>
+    <div class="card"><h3>🛡 Private by design</h3><p>No backend. No telemetry. Key stays in <code>chrome.storage.sync</code>, requests go straight to the provider.</p></div>
+    <div class="card"><h3>🧩 Three-strategy extractor</h3><p>DOM scrape → innertube → legacy captions. Survives YouTube's frequent API churn.</p></div>
+    <div class="card"><h3>📝 Structured output</h3><p>TL;DR, Key Points, Takeaways — copy as markdown, regenerate, or tweak the system prompt.</p></div>
+  </div>
+
+  <h2 class="section-h">Install from source</h2>
+  <ol class="steps">
+    <li>Download <a href="https://github.com/rupivbluegreen/omni-youtube-summarizer/releases/latest">the latest zip</a> and unzip.</li>
+    <li>Open <code>chrome://extensions</code> and enable <strong>Developer mode</strong>.</li>
+    <li>Click <strong>Load unpacked</strong> and select the unzipped <code>extension/</code> folder.</li>
+    <li>Click the extension icon → <strong>Settings</strong>. Pick a provider, paste your API key, save.</li>
+    <li>Open any YouTube video and click the ✨ <strong>Summarize</strong> button in the action row.</li>
+  </ol>
+
+  <h2 class="section-h">Providers</h2>
+  <table class="providers">
+    <thead><tr><th>Provider</th><th>Get a key</th><th>Vision</th><th>Default model</th></tr></thead>
+    <tbody>
+      <tr><td>Anthropic (Claude)</td><td><a href="https://console.anthropic.com/settings/keys">console.anthropic.com</a></td><td>All models</td><td><code>claude-haiku-4-5</code></td></tr>
+      <tr><td>OpenAI (GPT)</td><td><a href="https://platform.openai.com/api-keys">platform.openai.com</a></td><td>GPT-4o family</td><td><code>gpt-4o-mini</code></td></tr>
+      <tr><td>Google Gemini</td><td><a href="https://aistudio.google.com/apikey">aistudio.google.com</a></td><td>All recent</td><td><code>gemini-2.0-flash</code></td></tr>
+      <tr><td>Ollama (local)</td><td>—</td><td>Model-dependent</td><td><code>llama3.2</code></td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    MIT licensed. Built as a one-person open-source project.<br>
+    <a href="https://github.com/rupivbluegreen/omni-youtube-summarizer">Source</a> ·
+    <a href="https://github.com/rupivbluegreen/omni-youtube-summarizer/blob/main/PRIVACY.md">Privacy</a> ·
+    <a href="https://github.com/rupivbluegreen/omni-youtube-summarizer/blob/main/CHANGELOG.md">Changelog</a> ·
+    <a href="https://github.com/rupivbluegreen/omni-youtube-summarizer/issues">Issues</a>
+  </footer>
+</div>
+</body>
+</html>

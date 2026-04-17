@@ -2,9 +2,16 @@
 
 A Chrome extension that summarizes YouTube videos with your choice of LLM — **Claude, GPT, Gemini, or local Ollama**. Multi-modal: can attach chapter thumbnails alongside the transcript. No backend, no data collection — your API key stays in your browser.
 
+[![CI](https://github.com/rupivbluegreen/omni-youtube-summarizer/actions/workflows/ci.yml/badge.svg)](https://github.com/rupivbluegreen/omni-youtube-summarizer/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/rupivbluegreen/omni-youtube-summarizer?sort=semver)](https://github.com/rupivbluegreen/omni-youtube-summarizer/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/rupivbluegreen/omni-youtube-summarizer/total)](https://github.com/rupivbluegreen/omni-youtube-summarizer/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-blue.svg)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![Providers](https://img.shields.io/badge/Providers-4-green.svg)](#providers)
+[![Stars](https://img.shields.io/github/stars/rupivbluegreen/omni-youtube-summarizer?style=social)](https://github.com/rupivbluegreen/omni-youtube-summarizer/stargazers)
+
+![Demo](store-assets/screenshots/demo.gif)
+<sub>📽️ Drop a `demo.gif` into `store-assets/screenshots/` and this image will render. See [store-assets/screenshots/README.md](store-assets/screenshots/README.md) for recording tips.</sub>
 
 ## Features
 

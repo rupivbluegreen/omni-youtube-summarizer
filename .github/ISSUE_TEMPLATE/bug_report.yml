@@ -1,0 +1,68 @@
+name: Bug report
+description: Something's broken in the extension
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. The more specific you can be, the faster this gets fixed.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug. What did you expect vs. what did you see?
+      placeholder: Clicked Summarize, got error "No captions available" on a video that has captions.
+    validations:
+      required: true
+  - type: input
+    id: video-url
+    attributes:
+      label: Example YouTube URL
+      description: A public video that reproduces the issue.
+      placeholder: https://www.youtube.com/watch?v=...
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - Anthropic (Claude)
+        - OpenAI (GPT)
+        - Google Gemini
+        - Ollama (local)
+        - Not applicable / multiple
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      placeholder: claude-haiku-4-5-20251001
+  - type: input
+    id: version
+    attributes:
+      label: Extension version
+      description: From the extension card in chrome://extensions
+      placeholder: "1.1.0"
+    validations:
+      required: true
+  - type: input
+    id: chrome-version
+    attributes:
+      label: Chrome version
+      placeholder: chrome://version
+  - type: textarea
+    id: console
+    attributes:
+      label: Console output
+      description: Open DevTools on the YouTube tab and the service worker ("Inspect views: service worker" on the extension card). Paste lines prefixed with `[YT Summarizer]`.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched existing issues and didn't find a duplicate.
+          required: true
+        - label: I reloaded the extension and the YouTube tab before filing.
+          required: true

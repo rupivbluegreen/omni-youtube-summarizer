@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax-check JS
+        run: |
+          for f in extension/background.js extension/content.js extension/options.js extension/popup.js; do
+            echo "Checking $f"
+            node --check "$f"
+          done
+
+      - name: Validate manifest.json
+        run: |
+          python3 - <<'PY'
+          import json
+          with open('extension/manifest.json') as f:
+              m = json.load(f)
+          assert m['manifest_version'] == 3, 'Must be MV3'
+          assert m['version'], 'Version missing'
+          assert m['name'], 'Name missing'
+          forbidden = {'<all_urls>', 'tabs', 'scripting'}
+          got = set(m.get('permissions', []))
+          bad = got & forbidden
+          assert not bad, f'Forbidden permissions present: {bad}'
+          print('manifest.json OK - v{}'.format(m['version']))
+          PY
+
+      - name: Verify no placeholders / secrets remain
+        run: |
+          set -e
+          LEAKED=$(grep -rn 'YOUR_USERNAME' --include='*.md' --include='*.json' extension README.md PRIVACY.md CONTRIBUTING.md store-assets 2>/dev/null | grep -v CLAUDE.md || true)
+          if [ -n "$LEAKED" ]; then
+            echo 'YOUR_USERNAME placeholder leaked:'
+            echo "$LEAKED"
+            exit 1
+          fi
+          if grep -rnE 'sk-[a-zA-Z0-9]{20,}|AIza[0-9A-Za-z_-]{30,}' extension 2>/dev/null; then
+            echo 'Looks like a real API key was committed.'
+            exit 1
+          fi
