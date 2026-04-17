@@ -1,0 +1,120 @@
+* { box-sizing: border-box; }
+
+body {
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  background: #0f0f0f;
+  color: #f1f1f1;
+  margin: 0;
+  padding: 40px 24px;
+  min-height: 100vh;
+}
+
+.wrap { max-width: 620px; margin: 0 auto; }
+
+header { margin-bottom: 32px; }
+
+h1 { font-size: 24px; margin: 0 0 4px; font-weight: 600; }
+.sub { margin: 0; color: #aaa; font-size: 14px; }
+
+.field { margin-bottom: 24px; }
+
+label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+input, select, textarea {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  background: #1f1f1f;
+  color: #f1f1f1;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  font: 14px/1.4 inherit;
+  transition: border-color 0.15s;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: #3ea6ff;
+}
+
+textarea {
+  font-family: ui-monospace, 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 12px;
+  resize: vertical;
+  min-height: 120px;
+}
+
+.hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #888;
+  line-height: 1.5;
+}
+
+.hint a { color: #3ea6ff; text-decoration: none; }
+.hint a:hover { text-decoration: underline; }
+.hint code {
+  background: #2a2a2a;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+}
+
+.hint:empty { display: none; }
+
+.optional {
+  font-weight: 400;
+  color: #888;
+  font-size: 12px;
+}
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 13px;
+  margin-bottom: 0;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #2a2a2a;
+}
+
+button {
+  padding: 10px 22px;
+  background: #065fd4;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font: 500 14px/1 inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+button:hover { background: #0a72f5; }
+
+#status {
+  color: #4ade80;
+  font-size: 13px;
+  font-weight: 500;
+}

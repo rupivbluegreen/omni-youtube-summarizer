@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px;
+      width: 260px;
+      font: 13px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #212121;
+      color: #f1f1f1;
+    }
+    h1 { font-size: 14px; margin: 0 0 4px; font-weight: 600; }
+    p { margin: 0 0 12px; color: #aaa; font-size: 12px; }
+    .status {
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+    .status.ok { background: rgba(74, 222, 128, 0.12); color: #4ade80; }
+    .status.warn { background: rgba(250, 204, 21, 0.12); color: #facc15; }
+    button {
+      display: block;
+      width: 100%;
+      padding: 9px;
+      background: #065fd4;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font: 500 13px/1 inherit;
+    }
+    button:hover { background: #0a72f5; }
+    button.secondary {
+      background: transparent;
+      color: #3ea6ff;
+      margin-top: 6px;
+      padding: 6px;
+    }
+    button.secondary:hover { background: rgba(62, 166, 255, 0.1); }
+  </style>
+</head>
+<body>
+  <h1>YouTube Summarizer</h1>
+  <p>Open any YouTube video, click <strong>Summarize</strong> in the action row.</p>
+  <div id="status" class="status"></div>
+  <button id="opt">Settings</button>
+  <script src="popup.js"></script>
+</body>
+</html>

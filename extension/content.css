@@ -1,0 +1,205 @@
+/* content.css — injected into YouTube */
+
+#yt-summarizer-button.yts-summarize-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  margin-left: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--yt-spec-text-primary, #fff);
+  border: none;
+  border-radius: 18px;
+  font: 500 14px/1 'YouTube Sans', Roboto, Arial, sans-serif;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+
+#yt-summarizer-button.yts-summarize-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+#yt-summarizer-button.yts-summarize-btn:active {
+  transform: scale(0.97);
+}
+
+html[dark] #yt-summarizer-button.yts-summarize-btn {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Light theme fallback */
+ytd-app:not([dark]) #yt-summarizer-button.yts-summarize-btn {
+  background: rgba(0, 0, 0, 0.05);
+  color: #0f0f0f;
+}
+ytd-app:not([dark]) #yt-summarizer-button.yts-summarize-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Floating fallback — used when the action row can't be found */
+#yt-summarizer-button.yts-floating {
+  position: fixed !important;
+  bottom: 24px;
+  right: 24px;
+  z-index: 99998;
+  height: 44px;
+  padding: 0 18px 0 16px;
+  margin: 0;
+  background: #ff0000 !important;
+  color: #fff !important;
+  border-radius: 22px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+#yt-summarizer-button.yts-floating:hover {
+  background: #cc0000 !important;
+}
+
+.yts-btn-icon-inline { font-size: 16px; line-height: 1; }
+.yts-btn-label { font-weight: 500; }
+
+/* -------- Panel -------- */
+
+#yt-summarizer-panel {
+  position: fixed;
+  top: 72px;
+  right: 16px;
+  width: 420px;
+  max-height: calc(100vh - 96px);
+  background: #212121;
+  color: #f1f1f1;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  z-index: 99999;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  font: 14px/1.55 'YouTube Sans', Roboto, Arial, sans-serif;
+}
+
+#yt-summarizer-panel.yts-open { display: flex; }
+
+@media (max-width: 768px) {
+  #yt-summarizer-panel {
+    width: calc(100vw - 32px);
+    right: 16px;
+    left: 16px;
+  }
+}
+
+.yts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.yts-title {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+}
+
+.yts-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.yts-btn-icon {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.yts-btn-icon:hover { background: rgba(255, 255, 255, 0.1); }
+
+.yts-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.yts-footer {
+  padding: 8px 14px;
+  font-size: 11px;
+  color: #888;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  font-family: ui-monospace, monospace;
+  flex-shrink: 0;
+}
+
+.yts-footer:empty { display: none; }
+
+.yts-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 0;
+  opacity: 0.8;
+  font-size: 13px;
+}
+
+.yts-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: #ff4444;
+  border-radius: 50%;
+  animation: yts-spin 0.8s linear infinite;
+}
+
+@keyframes yts-spin { to { transform: rotate(360deg); } }
+
+.yts-error {
+  padding: 14px;
+  background: rgba(255, 68, 68, 0.08);
+  border: 1px solid rgba(255, 68, 68, 0.25);
+  border-radius: 8px;
+  color: #ff8888;
+  font-size: 13px;
+}
+
+.yts-error strong { display: block; margin-bottom: 4px; color: #ffaaaa; }
+
+/* Summary content */
+.yts-summary h2 { font-size: 17px; margin: 18px 0 8px; font-weight: 600; }
+.yts-summary h3 {
+  font-size: 11px;
+  margin: 16px 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #aaa;
+  font-weight: 600;
+}
+.yts-summary h3:first-child, .yts-summary h2:first-child { margin-top: 0; }
+.yts-summary h4 { font-size: 13px; margin: 12px 0 4px; font-weight: 600; }
+.yts-summary p { margin: 0 0 10px; }
+.yts-summary ul { margin: 0 0 14px; padding-left: 20px; }
+.yts-summary li { margin-bottom: 6px; }
+.yts-summary code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+}
+.yts-summary strong { font-weight: 600; color: #fff; }
+.yts-summary em { color: #ddd; }
