@@ -11,7 +11,18 @@ A Chrome extension that summarizes YouTube videos with your choice of LLM — **
 [![Stars](https://img.shields.io/github/stars/rupivbluegreen/omni-youtube-summarizer?style=social)](https://github.com/rupivbluegreen/omni-youtube-summarizer/stargazers)
 
 ![Demo](store-assets/screenshots/demo.gif)
-<sub>📽️ Drop a `demo.gif` into `store-assets/screenshots/` and this image will render. See [store-assets/screenshots/README.md](store-assets/screenshots/README.md) for recording tips.</sub>
+
+## Screenshots
+
+<table>
+  <tr>
+    <td><img src="store-assets/screenshots/screenshot-1-hero.png" alt="Hero"></td>
+    <td><img src="store-assets/screenshots/screenshot-2-summary.png" alt="Summary panel"></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="store-assets/screenshots/screenshot-3-byom.png" alt="Bring Your Own Model — Settings"></td>
+  </tr>
+</table>
 
 ## Features
 

@@ -1,19 +1,17 @@
 # Screenshots
 
-Drop your Chrome Web Store screenshots here before submitting.
+Current assets (used by README, GitHub Pages site, and Chrome Web Store listing):
 
-## Required dimensions
+- `demo.gif` — top-of-README animated demo.
+- `screenshot-1-hero.png` — product overview / hero shot.
+- `screenshot-2-summary.png` — side panel open on a real video.
+- `screenshot-3-byom.png` — Settings page showing the provider dropdown.
+
+## Chrome Web Store dimensions
 
 - **1280×800** (preferred) or **640×400**
 - PNG or JPG, max 16 MB each
 - 1 to 5 screenshots
-
-## Recommended shots (in order)
-
-1. `01-button-in-action-row.png` — crop of the YouTube action row with the ✨ Summarize button next to Like/Share/Save/Download.
-2. `02-summary-panel.png` — side panel open on a watch page, showing a real TL;DR / Key Points / Takeaways summary.
-3. `03-options-page.png` — Settings page with model selector visible. **Blur or redact the API key field.**
-4. `04-popup.png` (optional) — extension toolbar popup showing the "Ready" status.
 
 ## Taking the screenshots
 
