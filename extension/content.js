@@ -107,6 +107,8 @@
       return cached;
     }
 
+    const reasons = [];
+
     // Method 1: DOM scrape — click YouTube's own "Show transcript" button and read segments.
     // Most reliable because it uses YouTube's own auth/rendering.
     try {
@@ -116,13 +118,18 @@
       return t;
     } catch (e) {
       log('DOM scrape failed:', e.message, '— trying innertube API');
+      reasons.push(`DOM scrape: ${e.message}`);
     }
 
-    const res = await fetch(`/watch?v=${encodeURIComponent(videoId)}`, {
-      credentials: 'include',
-    });
-    if (!res.ok) throw new Error(`Failed to load video page (${res.status})`);
-    const html = await res.text();
+    let html;
+    try {
+      const res = await fetch(`/watch?v=${encodeURIComponent(videoId)}`, { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      html = await res.text();
+    } catch (e) {
+      reasons.push(`load watch page: ${e.message}`);
+      throw buildTranscriptError(reasons);
+    }
 
     // Method 2: innertube /youtubei/v1/get_transcript.
     try {
@@ -132,14 +139,21 @@
       return t;
     } catch (e) {
       log('innertube failed:', e.message, '— trying legacy caption URL');
+      reasons.push(`innertube: ${e.message}`);
     }
 
     // Method 3: legacy baseUrl fetch (often empty now, but kept as last resort).
     const playerResponse = extractPlayerResponse(html);
-    if (!playerResponse) throw new Error('Could not parse player response from page HTML');
+    if (!playerResponse) {
+      reasons.push('legacy: could not parse player response from page HTML');
+      throw buildTranscriptError(reasons);
+    }
 
     const tracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-    if (!tracks?.length) throw new Error('No captions available for this video.');
+    if (!tracks?.length) {
+      reasons.push('legacy: no captionTracks on this video — it probably has no captions');
+      throw buildTranscriptError(reasons);
+    }
 
     const track =
       tracks.find((t) => t.languageCode === 'en' && t.kind !== 'asr') ||
@@ -149,15 +163,32 @@
 
     log('Selected caption track:', { lang: track.languageCode, kind: track.kind || 'manual' });
 
-    let text;
     try {
-      text = await fetchTranscriptJson3(track.baseUrl);
+      const text = await fetchTranscriptJson3(track.baseUrl);
+      setCachedTranscript(videoId, text);
+      return text;
     } catch (e) {
       log('json3 failed:', e.message, '— falling back to XML');
-      text = await fetchTranscriptXml(track.baseUrl);
+      reasons.push(`legacy json3: ${e.message}`);
     }
-    setCachedTranscript(videoId, text);
-    return text;
+
+    try {
+      const text = await fetchTranscriptXml(track.baseUrl);
+      setCachedTranscript(videoId, text);
+      return text;
+    } catch (e) {
+      reasons.push(`legacy xml: ${e.message}`);
+    }
+
+    throw buildTranscriptError(reasons);
+  }
+
+  function buildTranscriptError(reasons) {
+    return new Error(
+      'No transcript could be extracted. Tried:\n  • ' +
+      reasons.join('\n  • ') +
+      '\nThis video may not have captions, or may be age/region restricted.'
+    );
   }
 
   // ---------- DOM scrape (preferred) ----------
@@ -607,8 +638,8 @@
             for (const ch of selected) {
               if (!ch.thumbnailUrl) continue;
               try {
-                const base64 = await fetchAsBase64(ch.thumbnailUrl);
-                images.push({ base64, label: ch.title, startSeconds: ch.startSeconds });
+                const { base64, mimeType } = await fetchAsBase64(ch.thumbnailUrl);
+                images.push({ base64, mimeType, label: ch.title, startSeconds: ch.startSeconds });
               } catch (e) {
                 log('chapter thumbnail fetch failed:', e.message);
               }
@@ -628,8 +659,8 @@
       ];
       for (const url of candidates) {
         try {
-          const base64 = await fetchAsBase64(url);
-          images.push({ base64, label: 'main thumbnail', startSeconds: 0 });
+          const { base64, mimeType } = await fetchAsBase64(url);
+          images.push({ base64, mimeType, label: 'main thumbnail', startSeconds: 0 });
           break;
         } catch (e) {
           log('main thumbnail fetch failed:', url, e.message);
@@ -678,11 +709,29 @@
     return null;
   }
 
+  const SUPPORTED_IMAGE_MIMES = new Set([
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  ]);
+
+  function mimeFromUrl(url) {
+    const lower = url.split('?')[0].toLowerCase();
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    return null;
+  }
+
   async function fetchAsBase64(url) {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();
-    return new Promise((resolve, reject) => {
+    let mimeType = blob.type || mimeFromUrl(url) || 'image/jpeg';
+    if (!SUPPORTED_IMAGE_MIMES.has(mimeType)) {
+      log('unsupported image MIME, falling back to image/jpeg:', mimeType);
+      mimeType = 'image/jpeg';
+    }
+    const base64 = await new Promise((resolve, reject) => {
       const r = new FileReader();
       r.onloadend = () => {
         const result = typeof r.result === 'string' ? r.result : '';
@@ -692,6 +741,7 @@
       r.onerror = () => reject(new Error('FileReader error'));
       r.readAsDataURL(blob);
     });
+    return { base64, mimeType };
   }
 
   // ---------- Button injection ----------

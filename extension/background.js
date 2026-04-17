@@ -238,7 +238,7 @@ async function callAnthropic(cfg, { system, userText, images, onDelta }) {
   const content = [
     ...images.map((img) => ({
       type: 'image',
-      source: { type: 'base64', media_type: 'image/jpeg', data: img.base64 },
+      source: { type: 'base64', media_type: img.mimeType || 'image/jpeg', data: img.base64 },
     })),
     { type: 'text', text: userText },
   ];
@@ -292,7 +292,7 @@ async function callOpenAI(cfg, { system, userText, images, onDelta }) {
         { type: 'text', text: userText },
         ...images.map((img) => ({
           type: 'image_url',
-          image_url: { url: `data:image/jpeg;base64,${img.base64}` },
+          image_url: { url: `data:${img.mimeType || 'image/jpeg'};base64,${img.base64}` },
         })),
       ]
     : userText;
@@ -347,7 +347,7 @@ async function callGemini(cfg, { system, userText, images, onDelta }) {
   const parts = [
     { text: userText },
     ...images.map((img) => ({
-      inline_data: { mime_type: 'image/jpeg', data: img.base64 },
+      inline_data: { mime_type: img.mimeType || 'image/jpeg', data: img.base64 },
     })),
   ];
 

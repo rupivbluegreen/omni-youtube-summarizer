@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-04-18
+
+### Fixed
+- **WebP thumbnails rejected by Anthropic.** YouTube now returns some chapter thumbnails (and `maxresdefault`) as `image/webp`, but the extension hard-coded `media_type: 'image/jpeg'` on every image sent to the LLM. Anthropic responded with `HTTP 400 — The image was specified using the image/jpeg media type, but the image appears to be a image/webp image`. `fetchAsBase64()` now reads the MIME from `blob.type` (falling back to URL-extension sniff, then `image/jpeg`), restricted to the four formats Anthropic supports (`jpeg | png | gif | webp`). The real MIME flows through to `callAnthropic`, `callOpenAI`, and `callGemini` request bodies.
+- **"Empty transcript response" was a misleading last-fallback error.** When all three transcript strategies failed, the user only saw whatever the XML fallback threw. `getTranscript()` now collects each strategy's failure message and surfaces a single actionable error listing all reasons, e.g.:
+  > No transcript could be extracted. Tried:
+  > • DOM scrape: "Show transcript" button not found on page
+  > • innertube: HTTP 400
+  > • legacy: no captionTracks on this video — it probably has no captions
+  >
+  > This video may not have captions, or may be age/region restricted.
+- `.yts-error` block now uses `white-space: pre-line` so multi-line error messages render as intended.
+
 ## [1.2.1] - 2026-04-18
 
 ### Fixed

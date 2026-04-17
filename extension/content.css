@@ -178,6 +178,7 @@ ytd-app:not([dark]) #yt-summarizer-button.yts-summarize-btn:hover {
 }
 
 .yts-error strong { display: block; margin-bottom: 4px; color: #ffaaaa; }
+.yts-error > div { white-space: pre-line; }
 
 /* Summary content */
 .yts-summary h2 { font-size: 17px; margin: 18px 0 8px; font-weight: 600; }
