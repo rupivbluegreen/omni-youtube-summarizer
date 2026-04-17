@@ -5,7 +5,7 @@ Thanks for your interest in improving Omni YouTube Summarizer.
 ## Setup
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/omni-youtube-summarizer.git
+git clone https://github.com/rupivbluegreen/omni-youtube-summarizer.git
 cd omni-youtube-summarizer
 ```
 

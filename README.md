@@ -22,7 +22,7 @@ A Chrome extension that summarizes YouTube videos with your choice of LLM — **
 ### From source
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/omni-youtube-summarizer.git
+git clone https://github.com/rupivbluegreen/omni-youtube-summarizer.git
 ```
 
 1. Open `chrome://extensions` → enable **Developer mode** (top right)

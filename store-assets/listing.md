@@ -29,7 +29,7 @@ WHY IT'S DIFFERENT
 • No subscription. Bring your own API key, pay Anthropic's standard per-token rates. A typical video with Haiku 4.5 costs a fraction of a cent.
 • Three transcript strategies (DOM scrape, YouTube's internal API, legacy caption URLs) for reliability across YouTube's frequent API changes.
 • Model choice: Claude Haiku 4.5 (fast, cheap), Sonnet 4.6 (balanced), or Opus 4.7 (best quality).
-• Open source. Code at github.com/YOUR_USERNAME/omni-youtube-summarizer (MIT license).
+• Open source. Code at github.com/rupivbluegreen/omni-youtube-summarizer (MIT license).
 • Customizable system prompt if you want summaries in a specific style.
 
 SETUP (one-time)
@@ -48,10 +48,10 @@ PRIVACY
 • No data collection by this extension.
 • Your API key is stored in Chrome's synced storage (local + Google sync).
 • Transcripts and video titles are sent only to api.anthropic.com.
-Full privacy policy: github.com/YOUR_USERNAME/omni-youtube-summarizer/blob/main/PRIVACY.md
+Full privacy policy: github.com/rupivbluegreen/omni-youtube-summarizer/blob/main/PRIVACY.md
 
 SOURCE CODE
-github.com/YOUR_USERNAME/omni-youtube-summarizer
+github.com/rupivbluegreen/omni-youtube-summarizer
 ```
 
 ## Category
@@ -115,7 +115,7 @@ When filling out the "Privacy practices" form in the Chrome Web Store console, t
 
 - **Privacy policy URL:**
   ```
-  https://github.com/YOUR_USERNAME/omni-youtube-summarizer/blob/main/PRIVACY.md
+  https://github.com/rupivbluegreen/omni-youtube-summarizer/blob/main/PRIVACY.md
   ```
 
 ## Pricing

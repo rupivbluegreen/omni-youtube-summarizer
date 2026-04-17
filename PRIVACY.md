@@ -59,4 +59,4 @@ Material changes will be documented in `CHANGELOG.md` and the effective date at 
 
 ## Contact
 
-Open an issue at [github.com/YOUR_USERNAME/omni-youtube-summarizer/issues](https://github.com/YOUR_USERNAME/omni-youtube-summarizer/issues).
+Open an issue at [github.com/rupivbluegreen/omni-youtube-summarizer/issues](https://github.com/rupivbluegreen/omni-youtube-summarizer/issues).
