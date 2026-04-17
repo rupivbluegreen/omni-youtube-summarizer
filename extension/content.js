@@ -48,12 +48,52 @@
     return '';
   }
 
+  // 24-hour transcript cache in chrome.storage.local. Keyed on videoId.
+  const TRANSCRIPT_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+  const TRANSCRIPT_CACHE_MAX_ENTRIES = 50;
+
+  async function getCachedTranscript(videoId) {
+    try {
+      const key = `tr:${videoId}`;
+      const res = await chrome.storage.local.get(key);
+      const hit = res[key];
+      if (!hit) return null;
+      if (Date.now() - hit.ts > TRANSCRIPT_CACHE_TTL_MS) {
+        chrome.storage.local.remove(key);
+        return null;
+      }
+      return hit.text;
+    } catch { return null; }
+  }
+
+  async function setCachedTranscript(videoId, text) {
+    try {
+      const key = `tr:${videoId}`;
+      await chrome.storage.local.set({ [key]: { text, ts: Date.now() } });
+      // Opportunistic cleanup: if cache is large, drop oldest entries.
+      const all = await chrome.storage.local.get(null);
+      const trs = Object.entries(all).filter(([k]) => k.startsWith('tr:'));
+      if (trs.length > TRANSCRIPT_CACHE_MAX_ENTRIES) {
+        trs.sort((a, b) => (a[1].ts || 0) - (b[1].ts || 0));
+        const toRemove = trs.slice(0, trs.length - TRANSCRIPT_CACHE_MAX_ENTRIES).map(([k]) => k);
+        chrome.storage.local.remove(toRemove);
+      }
+    } catch (e) { log('cache write failed:', e.message); }
+  }
+
   async function getTranscript(videoId) {
+    const cached = await getCachedTranscript(videoId);
+    if (cached) {
+      log('transcript cache hit, chars:', cached.length);
+      return cached;
+    }
+
     // Method 1: DOM scrape — click YouTube's own "Show transcript" button and read segments.
     // Most reliable because it uses YouTube's own auth/rendering.
     try {
       const t = await getTranscriptViaDom();
       log('DOM scrape succeeded, chars:', t.length);
+      setCachedTranscript(videoId, t);
       return t;
     } catch (e) {
       log('DOM scrape failed:', e.message, '— trying innertube API');
@@ -69,6 +109,7 @@
     try {
       const t = await getTranscriptInnertube(html, videoId);
       log('innertube succeeded, chars:', t.length);
+      setCachedTranscript(videoId, t);
       return t;
     } catch (e) {
       log('innertube failed:', e.message, '— trying legacy caption URL');
@@ -89,12 +130,15 @@
 
     log('Selected caption track:', { lang: track.languageCode, kind: track.kind || 'manual' });
 
+    let text;
     try {
-      return await fetchTranscriptJson3(track.baseUrl);
+      text = await fetchTranscriptJson3(track.baseUrl);
     } catch (e) {
       log('json3 failed:', e.message, '— falling back to XML');
-      return await fetchTranscriptXml(track.baseUrl);
+      text = await fetchTranscriptXml(track.baseUrl);
     }
+    setCachedTranscript(videoId, text);
+    return text;
   }
 
   // ---------- DOM scrape (preferred) ----------
@@ -500,7 +544,21 @@
     return html
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>');
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\[(\d{1,2}):(\d{2})(?::(\d{2}))?\]/g, (_, a, b, c) => {
+        const seconds = c
+          ? Number(a) * 3600 + Number(b) * 60 + Number(c)
+          : Number(a) * 60 + Number(b);
+        const label = c ? `${a}:${b}:${c}` : `${a}:${b}`;
+        return `<a class="yts-ts" data-seconds="${seconds}" href="#" title="Jump to ${label}">[${label}]</a>`;
+      });
+  }
+
+  function seekVideo(seconds) {
+    const video = document.querySelector('video');
+    if (!video) return;
+    video.currentTime = seconds;
+    if (video.paused) video.play().catch(() => {});
   }
 
   // ---------- Panel UI ----------
@@ -526,6 +584,14 @@
     document.body.appendChild(panel);
 
     panel.addEventListener('click', (e) => {
+      const ts = e.target?.closest?.('.yts-ts');
+      if (ts) {
+        e.preventDefault();
+        const s = Number(ts.dataset.seconds);
+        if (!Number.isNaN(s)) seekVideo(s);
+        return;
+      }
+
       const action = e.target?.dataset?.action;
       if (!action) return;
       if (action === 'close') panel.classList.remove('yts-open');
@@ -557,6 +623,10 @@
         '<div class="yts-loading"><div class="yts-spinner"></div><div>Summarizing…</div></div>';
     } else if (state === 'error') {
       body.innerHTML = `<div class="yts-error"><strong>Error</strong><div>${escapeHtml(content)}</div></div>`;
+    } else if (state === 'streaming') {
+      // renderMarkdown escapes HTML before applying markdown transforms (see function), so this is XSS-safe.
+      panel.dataset.markdown = content;
+      body.innerHTML = `<div class="yts-summary">${renderMarkdown(content)}<span class="yts-cursor"></span></div>`;
     } else if (state === 'summary') {
       panel.dataset.markdown = content;
       body.innerHTML = `<div class="yts-summary">${renderMarkdown(content)}</div>`;
@@ -578,32 +648,53 @@
     isSummarizing = true;
     showPanel('loading');
 
+    let transcript, title, channel, images;
     try {
-      const transcript = await getTranscript(videoId);
-      const title = getVideoTitle();
-      const channel = getChannelName();
-      const images = await getImages(videoId);
+      transcript = await getTranscript(videoId);
+      title = getVideoTitle();
+      channel = getChannelName();
+      images = await getImages(videoId);
       if (images.length) log(`collected ${images.length} image(s)`);
-
-      const response = await chrome.runtime.sendMessage({
-        type: 'summarize',
-        transcript,
-        title,
-        channel,
-        images,
-      });
-
-      if (response?.error) throw new Error(response.error);
-      showPanel('summary', response.summary, {
-        usage: response.usage,
-        model: response.model,
-        provider: response.provider,
-      });
     } catch (e) {
       showPanel('error', e?.message || String(e));
-    } finally {
       isSummarizing = false;
+      return;
     }
+
+    // Stream the response through a long-lived port.
+    const port = chrome.runtime.connect({ name: 'summarize' });
+    let accumulated = '';
+    let gotFirstChunk = false;
+
+    port.onMessage.addListener((msg) => {
+      if (msg.type === 'chunk') {
+        if (!gotFirstChunk) {
+          gotFirstChunk = true;
+        }
+        accumulated += msg.text;
+        showPanel('streaming', accumulated);
+      } else if (msg.type === 'done') {
+        showPanel('summary', msg.summary || accumulated, {
+          usage: msg.usage, model: msg.model, provider: msg.provider,
+        });
+        isSummarizing = false;
+      } else if (msg.type === 'error') {
+        showPanel('error', msg.message);
+        isSummarizing = false;
+      }
+    });
+    port.onDisconnect.addListener(() => {
+      if (isSummarizing) {
+        if (accumulated) {
+          showPanel('summary', accumulated, {});
+        } else {
+          showPanel('error', 'Summarization ended unexpectedly.');
+        }
+        isSummarizing = false;
+      }
+    });
+
+    port.postMessage({ type: 'start', transcript, title, channel, images });
   }
 
   // ---------- Image extraction (chapter thumbnails or main thumbnail) ----------

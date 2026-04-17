@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-04-18
+
+### Added
+- **Streaming responses** — summary text renders token-by-token as the model emits it, via a long-lived `chrome.runtime.connect` port. Service worker handles SSE for Anthropic / OpenAI / Gemini and NDJSON for Ollama.
+- **Clickable timestamps** — `[mm:ss]` and `[h:mm:ss]` references in the summary become click-to-seek links that jump the YouTube player to the moment being described. Default prompt now instructs the model to emit them when useful.
+- **Transcript caching** — extracted transcripts are stored in `chrome.storage.local` for 24 h (keyed on `videoId`) with opportunistic LRU-style eviction at 50 entries. Second and subsequent summaries of the same video skip the ~2–5 s extraction pipeline.
+- Blinking cursor indicator during streaming.
+
+### Changed
+- `background.js` provider functions now always request streaming responses from the upstream API and surface them via an optional `onDelta` callback. Non-streaming `chrome.runtime.sendMessage({ type: 'summarize' })` still works for callers that prefer one-shot.
+- Default system prompt updated to encourage `[mm:ss]` timestamp references in Key Points.
+
 ## [1.1.0] - 2026-04-17
 
 ### Added

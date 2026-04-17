@@ -203,3 +203,30 @@ ytd-app:not([dark]) #yt-summarizer-button.yts-summarize-btn:hover {
 }
 .yts-summary strong { font-weight: 600; color: #fff; }
 .yts-summary em { color: #ddd; }
+
+.yts-summary a.yts-ts {
+  color: #ff4b4b;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  padding: 1px 6px;
+  margin: 0 2px;
+  background: rgba(255, 75, 75, 0.12);
+  border-radius: 4px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.yts-summary a.yts-ts:hover {
+  background: rgba(255, 75, 75, 0.22);
+  text-decoration: none;
+}
+
+/* Streaming cursor (future-ready) */
+.yts-summary .yts-cursor {
+  display: inline-block;
+  width: 8px; height: 14px;
+  background: #ff4b4b;
+  vertical-align: text-bottom;
+  margin-left: 2px;
+  animation: yts-blink 1s step-end infinite;
+}
+@keyframes yts-blink { 50% { opacity: 0; } }
