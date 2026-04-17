@@ -1,5 +1,8 @@
 // background.js — service worker. Multi-provider LLM dispatcher with optional image input.
 
+importScripts('lib/parsers.js');
+const { sseEvents, ndjson } = YTS;
+
 const DEFAULT_PROMPT = `You are summarizing a YouTube video transcript. Produce a concise, high-signal summary.
 
 Output format (markdown):
@@ -72,32 +75,24 @@ const PROVIDERS = {
   },
 };
 
-// Messaging
+// Messaging — only 'getProviders' is handled here. Summarization goes through
+// the long-lived `onConnect` port below so we can stream deltas back to the UI.
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg?.type === 'getProviders') {
-    const meta = {};
-    for (const [key, p] of Object.entries(PROVIDERS)) {
-      meta[key] = {
-        label: p.label,
-        needsApiKey: p.needsApiKey,
-        needsBaseUrl: p.needsBaseUrl,
-        defaultModel: p.defaultModel,
-        defaultBaseUrl: p.defaultBaseUrl || '',
-        modelOptions: p.modelOptions,
-        supportsVision: p.supportsVision,
-      };
-    }
-    sendResponse({ providers: meta });
-    return false;
+  if (msg?.type !== 'getProviders') return false;
+  const meta = {};
+  for (const [key, p] of Object.entries(PROVIDERS)) {
+    meta[key] = {
+      label: p.label,
+      needsApiKey: p.needsApiKey,
+      needsBaseUrl: p.needsBaseUrl,
+      defaultModel: p.defaultModel,
+      defaultBaseUrl: p.defaultBaseUrl || '',
+      modelOptions: p.modelOptions,
+      supportsVision: p.supportsVision,
+    };
   }
-
-  if (msg?.type === 'summarize') {
-    // Non-streaming fallback (kept for backward compat with any caller that prefers one-shot).
-    summarize(msg)
-      .then(sendResponse)
-      .catch((e) => sendResponse({ error: e?.message || String(e) }));
-    return true; // async
-  }
+  sendResponse({ providers: meta });
+  return false;
 });
 
 // Streaming: content script opens a long-lived port and posts a 'start' message.
@@ -204,51 +199,35 @@ function formatTime(s) {
 // and only controls whether we forward tokens to the UI as they arrive. The returned
 // object always contains the fully-accumulated summary so non-streaming callers still work.
 
-// Parses Server-Sent Events from a fetch response body. Yields the parsed JSON payload
-// for each event with a `data:` line. Handles events that span multiple chunks.
-async function* sseEvents(response) {
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    let sep;
-    while ((sep = buf.indexOf('\n\n')) !== -1) {
-      const event = buf.slice(0, sep);
-      buf = buf.slice(sep + 2);
-      const dataLines = event
-        .split('\n')
-        .filter((l) => l.startsWith('data:'))
-        .map((l) => l.slice(5).trimStart());
-      if (!dataLines.length) continue;
-      const payload = dataLines.join('\n');
-      if (payload === '[DONE]') return;
-      try { yield JSON.parse(payload); } catch { /* ignore malformed */ }
-    }
-  }
+// Per-stream idle timeout: if no chunk has arrived in this many ms, abort the fetch.
+// Resets on every chunk/event; prevents hung streams from wedging the UI indefinitely.
+const STREAM_IDLE_TIMEOUT_MS = 60_000;
+
+function idleAbort(timeoutMs) {
+  const controller = new AbortController();
+  let timer = setTimeout(() => controller.abort(new DOMException('Idle timeout', 'AbortError')), timeoutMs);
+  return {
+    signal: controller.signal,
+    reset() {
+      clearTimeout(timer);
+      timer = setTimeout(() => controller.abort(new DOMException('Idle timeout', 'AbortError')), timeoutMs);
+    },
+    cleanup() { clearTimeout(timer); },
+  };
 }
 
-// Parses newline-delimited JSON (Ollama's streaming format).
-async function* ndjson(response) {
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    let nl;
-    while ((nl = buf.indexOf('\n')) !== -1) {
-      const line = buf.slice(0, nl).trim();
-      buf = buf.slice(nl + 1);
-      if (!line) continue;
-      try { yield JSON.parse(line); } catch { /* ignore */ }
+// Wraps a provider's streaming body in a uniform idle-timeout + error-translation layer.
+async function withStreamTimeout(label, runStream) {
+  const timer = idleAbort(STREAM_IDLE_TIMEOUT_MS);
+  try {
+    return await runStream(timer);
+  } catch (e) {
+    if (e?.name === 'AbortError') {
+      throw new Error(`${label} stream stalled — no data for ${STREAM_IDLE_TIMEOUT_MS / 1000}s. Try again.`);
     }
-  }
-  if (buf.trim()) {
-    try { yield JSON.parse(buf); } catch {}
+    throw e;
+  } finally {
+    timer.cleanup();
   }
 }
 
@@ -264,40 +243,44 @@ async function callAnthropic(cfg, { system, userText, images, onDelta }) {
     { type: 'text', text: userText },
   ];
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': cfg.apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 1500,
-      system,
-      messages: [{ role: 'user', content }],
-      stream: true,
-    }),
-  });
-  if (!res.ok) throw await apiError(res, 'Anthropic');
+  return withStreamTimeout('Anthropic', async (t) => {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      signal: t.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': cfg.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1500,
+        system,
+        messages: [{ role: 'user', content }],
+        stream: true,
+      }),
+    });
+    if (!res.ok) throw await apiError(res, 'Anthropic');
 
-  let summary = '';
-  let usage = { input_tokens: 0, output_tokens: 0 };
-  let finalModel = model;
-  for await (const ev of sseEvents(res)) {
-    if (ev.type === 'message_start') {
-      finalModel = ev.message?.model || finalModel;
-      if (ev.message?.usage) usage.input_tokens = ev.message.usage.input_tokens || 0;
-    } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
-      const d = ev.delta.text || '';
-      summary += d;
-      if (onDelta && d) onDelta(d);
-    } else if (ev.type === 'message_delta') {
-      if (ev.usage?.output_tokens != null) usage.output_tokens = ev.usage.output_tokens;
+    let summary = '';
+    let usage = { input_tokens: 0, output_tokens: 0 };
+    let finalModel = model;
+    for await (const ev of sseEvents(res)) {
+      t.reset();
+      if (ev.type === 'message_start') {
+        finalModel = ev.message?.model || finalModel;
+        if (ev.message?.usage) usage.input_tokens = ev.message.usage.input_tokens || 0;
+      } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+        const d = ev.delta.text || '';
+        summary += d;
+        if (onDelta && d) onDelta(d);
+      } else if (ev.type === 'message_delta') {
+        if (ev.usage?.output_tokens != null) usage.output_tokens = ev.usage.output_tokens;
+      }
     }
-  }
-  return { summary, usage, model: finalModel, provider: 'anthropic' };
+    return { summary, usage, model: finalModel, provider: 'anthropic' };
+  });
 }
 
 async function callOpenAI(cfg, { system, userText, images, onDelta }) {
@@ -314,43 +297,47 @@ async function callOpenAI(cfg, { system, userText, images, onDelta }) {
       ]
     : userText;
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${cfg.apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: userContent },
-      ],
-      max_tokens: 1500,
-      stream: true,
-      stream_options: { include_usage: true },
-    }),
-  });
-  if (!res.ok) throw await apiError(res, 'OpenAI');
+  return withStreamTimeout('OpenAI', async (t) => {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      signal: t.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${cfg.apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: userContent },
+        ],
+        max_tokens: 1500,
+        stream: true,
+        stream_options: { include_usage: true },
+      }),
+    });
+    if (!res.ok) throw await apiError(res, 'OpenAI');
 
-  let summary = '';
-  let usage = null;
-  let finalModel = model;
-  for await (const ev of sseEvents(res)) {
-    finalModel = ev.model || finalModel;
-    const delta = ev.choices?.[0]?.delta?.content;
-    if (delta) {
-      summary += delta;
-      if (onDelta) onDelta(delta);
+    let summary = '';
+    let usage = null;
+    let finalModel = model;
+    for await (const ev of sseEvents(res)) {
+      t.reset();
+      finalModel = ev.model || finalModel;
+      const delta = ev.choices?.[0]?.delta?.content;
+      if (delta) {
+        summary += delta;
+        if (onDelta) onDelta(delta);
+      }
+      if (ev.usage) {
+        usage = {
+          input_tokens: ev.usage.prompt_tokens,
+          output_tokens: ev.usage.completion_tokens,
+        };
+      }
     }
-    if (ev.usage) {
-      usage = {
-        input_tokens: ev.usage.prompt_tokens,
-        output_tokens: ev.usage.completion_tokens,
-      };
-    }
-  }
-  return { summary, usage, model: finalModel, provider: 'openai' };
+    return { summary, usage, model: finalModel, provider: 'openai' };
+  });
 }
 
 async function callGemini(cfg, { system, userText, images, onDelta }) {
@@ -368,36 +355,40 @@ async function callGemini(cfg, { system, userText, images, onDelta }) {
     model
   )}:streamGenerateContent?alt=sse&key=${encodeURIComponent(cfg.apiKey)}`;
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: 'user', parts }],
-      generationConfig: { maxOutputTokens: 1500 },
-    }),
-  });
-  if (!res.ok) throw await apiError(res, 'Gemini');
+  return withStreamTimeout('Gemini', async (t) => {
+    const res = await fetch(url, {
+      method: 'POST',
+      signal: t.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts }],
+        generationConfig: { maxOutputTokens: 1500 },
+      }),
+    });
+    if (!res.ok) throw await apiError(res, 'Gemini');
 
-  let summary = '';
-  let usage = null;
-  for await (const ev of sseEvents(res)) {
-    const partsOut = ev.candidates?.[0]?.content?.parts || [];
-    for (const p of partsOut) {
-      const d = p.text || '';
-      if (d) {
-        summary += d;
-        if (onDelta) onDelta(d);
+    let summary = '';
+    let usage = null;
+    for await (const ev of sseEvents(res)) {
+      t.reset();
+      const partsOut = ev.candidates?.[0]?.content?.parts || [];
+      for (const p of partsOut) {
+        const d = p.text || '';
+        if (d) {
+          summary += d;
+          if (onDelta) onDelta(d);
+        }
+      }
+      if (ev.usageMetadata) {
+        usage = {
+          input_tokens: ev.usageMetadata.promptTokenCount,
+          output_tokens: ev.usageMetadata.candidatesTokenCount,
+        };
       }
     }
-    if (ev.usageMetadata) {
-      usage = {
-        input_tokens: ev.usageMetadata.promptTokenCount,
-        output_tokens: ev.usageMetadata.candidatesTokenCount,
-      };
-    }
-  }
-  return { summary, usage, model, provider: 'gemini' };
+    return { summary, usage, model, provider: 'gemini' };
+  });
 }
 
 async function callOllama(cfg, { system, userText, images, onDelta }) {
@@ -407,41 +398,46 @@ async function callOllama(cfg, { system, userText, images, onDelta }) {
   const userMessage = { role: 'user', content: userText };
   if (images.length) userMessage.images = images.map((i) => i.base64);
 
-  const res = await fetch(`${baseUrl}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: 'system', content: system }, userMessage],
-      stream: true,
-    }),
-  }).catch((e) => {
-    throw new Error(
-      `Ollama fetch failed: ${e.message}. Is Ollama running? Set OLLAMA_ORIGINS=chrome-extension://* and restart ollama serve.`
-    );
-  });
-  if (!res.ok) throw await apiError(res, 'Ollama');
+  return withStreamTimeout('Ollama', async (t) => {
+    const res = await fetch(`${baseUrl}/api/chat`, {
+      method: 'POST',
+      signal: t.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'system', content: system }, userMessage],
+        stream: true,
+      }),
+    }).catch((e) => {
+      if (e?.name === 'AbortError') throw e;
+      throw new Error(
+        `Ollama fetch failed: ${e.message}. Is Ollama running? Set OLLAMA_ORIGINS=chrome-extension://* and restart ollama serve.`
+      );
+    });
+    if (!res.ok) throw await apiError(res, 'Ollama');
 
-  let summary = '';
-  let usage = null;
-  let finalModel = model;
-  for await (const chunk of ndjson(res)) {
-    finalModel = chunk.model || finalModel;
-    const d = chunk.message?.content || '';
-    if (d) {
-      summary += d;
-      if (onDelta) onDelta(d);
-    }
-    if (chunk.done) {
-      if (chunk.prompt_eval_count || chunk.eval_count) {
-        usage = {
-          input_tokens: chunk.prompt_eval_count || 0,
-          output_tokens: chunk.eval_count || 0,
-        };
+    let summary = '';
+    let usage = null;
+    let finalModel = model;
+    for await (const chunk of ndjson(res)) {
+      t.reset();
+      finalModel = chunk.model || finalModel;
+      const d = chunk.message?.content || '';
+      if (d) {
+        summary += d;
+        if (onDelta) onDelta(d);
+      }
+      if (chunk.done) {
+        if (chunk.prompt_eval_count || chunk.eval_count) {
+          usage = {
+            input_tokens: chunk.prompt_eval_count || 0,
+            output_tokens: chunk.eval_count || 0,
+          };
+        }
       }
     }
-  }
-  return { summary, usage, model: finalModel, provider: 'ollama' };
+    return { summary, usage, model: finalModel, provider: 'ollama' };
+  });
 }
 
 async function apiError(res, label) {

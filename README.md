@@ -125,24 +125,40 @@ v1.0.x users are auto-migrated on first load.
 
 No build step. Plain JS/CSS/HTML. Edit files under `extension/`, reload the extension card in `chrome://extensions`, reload the YouTube tab.
 
-Syntax-check before committing:
+Syntax-check + tests before committing:
 
 ```bash
-for f in extension/background.js extension/content.js extension/options.js extension/popup.js; do node --check $f; done
+for f in extension/lib/parsers.js extension/background.js extension/content.js extension/options.js extension/popup.js; do node --check $f; done
 python3 -c "import json; json.load(open('extension/manifest.json'))"
+node --test tests/
 ```
 
 ## Contributing
 
-PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [good first issues](https://github.com/rupivbluegreen/omni-youtube-summarizer/issues?q=is%3Aopen+label%3A%22good+first+issue%22).
 
-Good next issues:
-- **Streaming response** — render tokens as they arrive (SSE for OpenAI/Anthropic, streaming JSON for Gemini/Ollama).
-- **Transcript cache** — `chrome.storage.local` keyed on `videoId + provider + model + includeImages`.
-- **More providers** — Mistral, Cohere, any OpenAI-compatible endpoint (DeepSeek, Groq, Together, etc.).
-- **Timestamp links** — extract `tStartMs` from segments, render clickable `[mm:ss]` links that seek the player.
-- **Q&A mode** — follow-up input against the same transcript.
-- **Chapter-scoped summaries** — one summary per chapter instead of a single overall summary.
+## Contributors
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/rupivbluegreen">
+        <img src="https://github.com/rupivbluegreen.png" width="80" alt="rupivbluegreen"><br>
+        <sub><b>rupivbluegreen</b></sub>
+      </a><br>
+      <sub>Maintainer</sub>
+    </td>
+    <td align="center">
+      <a href="https://claude.com/claude-code">
+        <img src="https://avatars.githubusercontent.com/u/186046598?s=200" width="80" alt="Claude"><br>
+        <sub><b>Claude</b></sub>
+      </a><br>
+      <sub>AI pair-programmer<br>(see commit co-authorship)</sub>
+    </td>
+  </tr>
+</table>
+
+From v1.2.1 onward, commits written with [Claude Code](https://claude.com/claude-code) assistance include a `Co-Authored-By: Claude …` trailer — searchable via `git log --grep "Co-Authored-By: Claude"`.
 
 ## License
 

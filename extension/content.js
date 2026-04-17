@@ -1,6 +1,15 @@
 // content.js — injects Summarize button + side panel on YouTube watch pages.
+// Requires lib/parsers.js to be loaded before this (see manifest.json content_scripts.js).
 
 (() => {
+  const {
+    sliceBalancedJson,
+    escapeHtml,
+    renderMarkdown,
+    findTranscriptParams,
+    extractTranscriptTexts,
+  } = (typeof globalThis !== 'undefined' ? globalThis : self).YTS;
+
   const PANEL_ID = 'yt-summarizer-panel';
   const BUTTON_ID = 'yt-summarizer-button';
 
@@ -57,7 +66,11 @@
       const key = `tr:${videoId}`;
       const res = await chrome.storage.local.get(key);
       const hit = res[key];
-      if (!hit) return null;
+      // Validate shape — earlier versions or storage corruption could produce malformed entries.
+      if (!hit || typeof hit.ts !== 'number' || typeof hit.text !== 'string') {
+        if (hit) chrome.storage.local.remove(key);
+        return null;
+      }
       if (Date.now() - hit.ts > TRANSCRIPT_CACHE_TTL_MS) {
         chrome.storage.local.remove(key);
         return null;
@@ -66,11 +79,17 @@
     } catch { return null; }
   }
 
+  // Only scan-and-evict every Nth write to amortize cost on the hot path.
+  let transcriptCacheWriteCount = 0;
+  const TRANSCRIPT_CACHE_EVICT_EVERY = 10;
+
   async function setCachedTranscript(videoId, text) {
     try {
       const key = `tr:${videoId}`;
       await chrome.storage.local.set({ [key]: { text, ts: Date.now() } });
-      // Opportunistic cleanup: if cache is large, drop oldest entries.
+      transcriptCacheWriteCount++;
+      if (transcriptCacheWriteCount % TRANSCRIPT_CACHE_EVICT_EVERY !== 0) return;
+
       const all = await chrome.storage.local.get(null);
       const trs = Object.entries(all).filter(([k]) => k.startsWith('tr:'));
       if (trs.length > TRANSCRIPT_CACHE_MAX_ENTRIES) {
@@ -335,55 +354,6 @@
     return null;
   }
 
-  function findTranscriptParams(data) {
-    const panels = data?.engagementPanels || [];
-    for (const panel of panels) {
-      const r = panel.engagementPanelSectionListRenderer;
-      if (!r) continue;
-      const pid = r.panelIdentifier || r.targetId || '';
-      if (!String(pid).includes('transcript')) continue;
-
-      const params =
-        r.content?.continuationItemRenderer?.continuationEndpoint?.getTranscriptEndpoint?.params ||
-        r.content?.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token;
-      if (params) return params;
-    }
-    return null;
-  }
-
-  // Recursively collect transcript text from innertube response.
-  // Handles both transcriptSegmentRenderer (new) and transcriptCueRenderer (older) shapes.
-  function extractTranscriptTexts(data) {
-    const texts = [];
-    const walk = (obj) => {
-      if (!obj || typeof obj !== 'object') return;
-
-      if (obj.transcriptSegmentRenderer) {
-        const snippet = obj.transcriptSegmentRenderer.snippet;
-        const text =
-          snippet?.simpleText ||
-          (Array.isArray(snippet?.runs) ? snippet.runs.map((r) => r.text || '').join('') : '');
-        if (text) texts.push(text);
-        return;
-      }
-      if (obj.transcriptCueRenderer) {
-        const cue = obj.transcriptCueRenderer.cue;
-        const text =
-          cue?.simpleText ||
-          (Array.isArray(cue?.runs) ? cue.runs.map((r) => r.text || '').join('') : '');
-        if (text) texts.push(text);
-        return;
-      }
-
-      for (const val of Object.values(obj)) {
-        if (Array.isArray(val)) val.forEach(walk);
-        else if (val && typeof val === 'object') walk(val);
-      }
-    };
-    walk(data);
-    return texts;
-  }
-
   // Robust extractor that handles nested braces / multiple patterns.
   function extractPlayerResponse(html) {
     const markers = [
@@ -402,29 +372,6 @@
         return JSON.parse(jsonStr);
       } catch (e) {
         log('player response JSON parse failed, trying next pattern:', e.message);
-      }
-    }
-    return null;
-  }
-
-  // Walks characters tracking brace depth and string escapes to extract a full JSON object.
-  function sliceBalancedJson(s, start) {
-    let depth = 0;
-    let inStr = false;
-    let escape = false;
-    for (let i = start; i < s.length; i++) {
-      const c = s[i];
-      if (inStr) {
-        if (escape) escape = false;
-        else if (c === '\\') escape = true;
-        else if (c === '"') inStr = false;
-      } else {
-        if (c === '"') inStr = true;
-        else if (c === '{') depth++;
-        else if (c === '}') {
-          depth--;
-          if (depth === 0) return s.slice(start, i + 1);
-        }
       }
     }
     return null;
@@ -491,73 +438,14 @@
   }
 
   // ---------- Rendering ----------
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;',
-    }[c]));
-  }
-
-  // Tiny markdown renderer — escapes first, then applies transforms. Safe against XSS.
-  function renderMarkdown(md) {
-    const lines = escapeHtml(md).split('\n');
-    let html = '';
-    let inList = false;
-    let paragraph = [];
-    const flushPara = () => {
-      if (paragraph.length) {
-        html += `<p>${paragraph.join(' ')}</p>`;
-        paragraph = [];
-      }
-    };
-    for (const line of lines) {
-      if (/^###\s/.test(line)) {
-        flushPara();
-        if (inList) { html += '</ul>'; inList = false; }
-        html += `<h4>${line.replace(/^###\s/, '')}</h4>`;
-      } else if (/^##\s/.test(line)) {
-        flushPara();
-        if (inList) { html += '</ul>'; inList = false; }
-        html += `<h3>${line.replace(/^##\s/, '')}</h3>`;
-      } else if (/^#\s/.test(line)) {
-        flushPara();
-        if (inList) { html += '</ul>'; inList = false; }
-        html += `<h2>${line.replace(/^#\s/, '')}</h2>`;
-      } else if (/^[-*]\s/.test(line)) {
-        flushPara();
-        if (!inList) { html += '<ul>'; inList = true; }
-        html += `<li>${line.replace(/^[-*]\s/, '')}</li>`;
-      } else if (!line.trim()) {
-        flushPara();
-        if (inList) { html += '</ul>'; inList = false; }
-      } else {
-        paragraph.push(line);
-      }
-    }
-    flushPara();
-    if (inList) html += '</ul>';
-
-    return html
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\[(\d{1,2}):(\d{2})(?::(\d{2}))?\]/g, (_, a, b, c) => {
-        const seconds = c
-          ? Number(a) * 3600 + Number(b) * 60 + Number(c)
-          : Number(a) * 60 + Number(b);
-        const label = c ? `${a}:${b}:${c}` : `${a}:${b}`;
-        return `<a class="yts-ts" data-seconds="${seconds}" href="#" title="Jump to ${label}">[${label}]</a>`;
-      });
-  }
+  // escapeHtml and renderMarkdown come from YTS (lib/parsers.js).
 
   function seekVideo(seconds) {
-    const video = document.querySelector('video');
+    const video =
+      document.querySelector('#movie_player video') || document.querySelector('video');
     if (!video) return;
-    video.currentTime = seconds;
+    const target = Math.max(0, Math.min(video.duration || seconds, seconds));
+    video.currentTime = target;
     if (video.paused) video.play().catch(() => {});
   }
 
@@ -630,14 +518,15 @@
     } else if (state === 'summary') {
       panel.dataset.markdown = content;
       body.innerHTML = `<div class="yts-summary">${renderMarkdown(content)}</div>`;
+      const parts = [];
+      if (meta?.provider) parts.push(`${meta.provider}/${meta.model || ''}`);
+      else if (meta?.model) parts.push(meta.model);
       if (meta?.usage) {
         const { input_tokens = 0, output_tokens = 0 } = meta.usage;
-        const providerLabel = meta.provider ? `${meta.provider}/` : '';
-        footer.textContent = `${providerLabel}${meta.model || ''} · ${input_tokens} in / ${output_tokens} out`;
-      } else if (meta?.model) {
-        const providerLabel = meta.provider ? `${meta.provider}/` : '';
-        footer.textContent = `${providerLabel}${meta.model}`;
+        parts.push(`${input_tokens} in / ${output_tokens} out`);
       }
+      if (meta?.truncated) parts.push('⚠ stream ended early — click ↻ to regenerate');
+      footer.textContent = parts.join(' · ');
     }
   }
 
@@ -664,34 +553,32 @@
     // Stream the response through a long-lived port.
     const port = chrome.runtime.connect({ name: 'summarize' });
     let accumulated = '';
-    let gotFirstChunk = false;
+    let completed = false;
 
     port.onMessage.addListener((msg) => {
       if (msg.type === 'chunk') {
-        if (!gotFirstChunk) {
-          gotFirstChunk = true;
-        }
         accumulated += msg.text;
         showPanel('streaming', accumulated);
       } else if (msg.type === 'done') {
+        completed = true;
         showPanel('summary', msg.summary || accumulated, {
           usage: msg.usage, model: msg.model, provider: msg.provider,
         });
         isSummarizing = false;
       } else if (msg.type === 'error') {
+        completed = true;
         showPanel('error', msg.message);
         isSummarizing = false;
       }
     });
     port.onDisconnect.addListener(() => {
-      if (isSummarizing) {
-        if (accumulated) {
-          showPanel('summary', accumulated, {});
-        } else {
-          showPanel('error', 'Summarization ended unexpectedly.');
-        }
-        isSummarizing = false;
+      if (completed) return;
+      if (accumulated) {
+        showPanel('summary', accumulated, { truncated: true });
+      } else {
+        showPanel('error', 'Summarization ended unexpectedly. Try again.');
       }
+      isSummarizing = false;
     });
 
     port.postMessage({ type: 'start', transcript, title, channel, images });

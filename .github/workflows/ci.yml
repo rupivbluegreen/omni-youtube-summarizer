@@ -21,10 +21,13 @@ jobs:
 
       - name: Syntax-check JS
         run: |
-          for f in extension/background.js extension/content.js extension/options.js extension/popup.js; do
+          for f in extension/lib/parsers.js extension/background.js extension/content.js extension/options.js extension/popup.js; do
             echo "Checking $f"
             node --check "$f"
           done
+
+      - name: Run unit tests
+        run: node --test tests/
 
       - name: Validate manifest.json
         run: |
@@ -45,7 +48,12 @@ jobs:
       - name: Verify no placeholders / secrets remain
         run: |
           set -e
-          LEAKED=$(grep -rn 'YOUR_USERNAME' --include='*.md' --include='*.json' extension README.md PRIVACY.md CONTRIBUTING.md store-assets 2>/dev/null | grep -v CLAUDE.md || true)
+          # Anything referencing YOUR_USERNAME outside CLAUDE.md (which documents the
+          # placeholder-replacement flow itself) means the release fix-up wasn't run.
+          LEAKED=$(grep -rn 'YOUR_USERNAME' \
+            --include='*.md' --include='*.json' --include='*.html' \
+            --exclude='CLAUDE.md' \
+            extension README.md PRIVACY.md CONTRIBUTING.md store-assets docs 2>/dev/null || true)
           if [ -n "$LEAKED" ]; then
             echo 'YOUR_USERNAME placeholder leaked:'
             echo "$LEAKED"

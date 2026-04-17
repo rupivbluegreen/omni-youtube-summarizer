@@ -4,6 +4,26 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-04-18
+
+### Fixed
+- **GitHub Pages logo + favicon 404** — icons were referenced via `../extension/icons/` but Pages serves from `/docs`. Copied icons into `docs/` and updated the paths.
+- **Streams could wedge indefinitely on hung providers.** All four providers now wrap their streaming body in a 60 s idle-timeout `AbortController`. The timer resets on every chunk; if it fires, the stream aborts and surfaces a short "stream stalled" error instead of leaving the UI spinning.
+- **Mid-stream disconnect silently rendered partial text as if the model finished.** The footer now shows a `⚠ stream ended early` indicator when the port closes before a `done` message.
+- **`seekVideo()` could target the wrong `<video>` element** (YouTube sidebar previews). Now prefers `#movie_player video`. Also clamps the target time to `[0, video.duration]`.
+- **Transcript cache trusted malformed entries.** `getCachedTranscript` now validates `{ts: number, text: string}` shape and evicts bad entries on read.
+
+### Changed
+- Extracted pure parsing/rendering helpers (`sseEvents`, `ndjson`, `sliceBalancedJson`, `escapeHtml`, `renderMarkdown`, `findTranscriptParams`, `extractTranscriptTexts`) into `extension/lib/parsers.js`. Loaded by both the service worker (`importScripts`) and the content script (manifest).
+- Transcript cache eviction scan now runs only every 10 writes, rather than on every write.
+- Removed the dead `chrome.runtime.onMessage` `summarize` path — all summarization now uses the streaming port.
+- CI `YOUR_USERNAME` check widened to cover `docs/` and `*.html`; uses explicit `--exclude=CLAUDE.md` instead of a fragile pipe grep.
+- `manifest.json` `homepage_url` now points at the GitHub Pages site.
+
+### Added
+- **Unit tests** (`tests/parsers.test.js`, 31 cases) covering the extracted helpers — SSE/NDJSON parser correctness including chunk boundaries and `[DONE]`, balanced-brace JSON extraction with escaped quotes, markdown XSS safety, timestamp linkification, and YouTube innertube walkers. Wired into CI.
+- README "Contributors" section acknowledging Claude Code as AI pair-programmer. Future commits carry a `Co-Authored-By: Claude …` trailer.
+
 ## [1.2.0] - 2026-04-18
 
 ### Added
